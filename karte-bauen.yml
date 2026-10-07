@@ -1,0 +1,81 @@
+name: Deutschland-Karte bauen
+
+# Erzeugt die Offline-Kartendatei (PMTiles, OpenMapTiles-Schema) für die Navi-App.
+# Start: Reiter "Actions" → "Deutschland-Karte bauen" → "Run workflow".
+# Ergebnis: Artifact "Deutschland-Karte" mit Teil-Dateien (je ca. 1,9 GB) + Prüfsumme.
+
+on:
+  workflow_dispatch:
+    inputs:
+      gebiet:
+        description: 'Gebiet (Planetiler/Geofabrik-Name), z. B. germany, niedersachsen, bremen'
+        default: 'germany'
+        required: true
+        type: string
+      maxzoom:
+        description: 'Höchste Zoomstufe (14 = Hausnummern/Gebäude, 12 = deutlich kleinere Datei)'
+        default: '14'
+        required: true
+        type: string
+
+jobs:
+  karte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Platz schaffen (die Karte braucht viel Speicher)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Planetiler laden
+        run: |
+          curl -fL -o planetiler.jar https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar
+          ls -l planetiler.jar
+
+      - name: Karte erzeugen (lädt die OpenStreetMap-Daten selbst)
+        env:
+          GEBIET: ${{ inputs.gebiet }}
+          MAXZOOM: ${{ inputs.maxzoom }}
+        run: |
+          java -Xmx10g -jar planetiler.jar --download --area="$GEBIET" --maxzoom="$MAXZOOM" --output=deutschland.pmtiles
+          ls -l deutschland.pmtiles
+
+      - name: Datei prüfen (PMTiles 3, Vektorkacheln, OpenMapTiles-Ebenen)
+        run: |
+          python3 - <<'EOF'
+          import struct, gzip, json
+          f = open('deutschland.pmtiles', 'rb'); h = f.read(127)
+          assert h[:7] == b'PMTiles' and h[7] == 3, 'kein PMTiles 3'
+          assert h[99] == 1, 'keine Vektorkacheln'
+          mo, ml = struct.unpack_from('<QQ', h, 24)
+          f.seek(mo); m = f.read(ml); m = gzip.decompress(m) if m[:2] == b'\x1f\x8b' else m
+          ebenen = {l['id'] for l in json.loads(m).get('vector_layers', [])}
+          print('Zoom', h[100], 'bis', h[101], '| Ebenen:', sorted(ebenen))
+          for e in ('water', 'transportation', 'building', 'landcover'):
+              assert e in ebenen, 'Ebene fehlt: ' + e
+          print('OK: Format passt zur App.')
+          EOF
+
+      - name: Prüfsumme und Teile (GitHub erlaubt nur begrenzt große Dateien)
+        run: |
+          mkdir -p ausgabe
+          sha256sum deutschland.pmtiles | tee ausgabe/pruefsumme.txt
+          split -b 1900m -d deutschland.pmtiles ausgabe/teil-
+          ls -l ausgabe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Deutschland-Karte
+          path: ausgabe/*
+          retention-days: 14
+          compression-level: 0

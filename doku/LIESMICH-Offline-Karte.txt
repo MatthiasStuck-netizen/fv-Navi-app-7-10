@@ -1,0 +1,63 @@
+FEHNVERLEIH NAVI 3.4 – OFFLINE-KARTE IM EIGENEN FENSTER
+=======================================================
+
+Was ist neu?
+  Die Online-Karte bleibt, wie sie ist. Dazu kann man jetzt eine Deutschland-Karte aufs Handy laden.
+  Sie erscheint im selben Kartenfenster der Navi-App (kein Organic Maps / OsmAnd mehr nötig):
+    • Einstellungen → "Offline-Karte (in diesem Fenster)": Karte laden, pausieren, löschen
+    • Anzeige "Ohne Internet" (automatisch) oder "Immer"
+    • Fällt unterwegs das Internet aus, wechselt die Karte von selbst auf die Offline-Karte
+    • Knopf "Offline-Navi" bei der Route: zeigt in der Karte Standort, Ziel, Luftlinie und Richtung
+  Die alte Möglichkeit mit Organic Maps / OsmAnd bleibt als "Weitere Offline-App" erhalten.
+
+WICHTIG – was die Offline-Funktion NICHT kann
+  • Keine Straßenroute und keine Abbiege-Ansagen ohne Internet. Die Route wird weiter online berechnet
+    (Valhalla). Offline gibt es Karte, eigene Position, Ziel, Luftlinie und Himmelsrichtung.
+  • Orts- und Straßennamen können offline fehlen (die Schriften kommen weiter aus dem Internet).
+
+1) KARTENDATEI ERZEUGEN (einmalig)
+  Weg A – automatisch auf GitHub (kein eigener Rechner nötig): siehe README.md, Abschnitt
+          "Offline-Kartendatei per GitHub erzeugen". Actions → "Deutschland-Karte bauen" → "Run workflow".
+          Ergebnis kommt in mehreren Teilen; mit  copy /b teil-* deutschland.pmtiles  (Windows) bzw.
+          cat teil-* > deutschland.pmtiles  (Linux/Mac) zusammenfügen.
+  Weg B – am PC (einmalig):
+  Die App liest eine PMTiles-Datei im OpenMapTiles-Schema (Vektorkacheln). Mit Planetiler:
+    java -Xmx8g -jar planetiler.jar --download --area=germany --output=deutschland.pmtiles
+  (Planetiler: github.com/onthegomap/planetiler – Java 21, einige GB Speicher und Zeit nötig.)
+  Datenquelle: OpenStreetMap-Mitwirkende (ODbL) – Hinweis in der App bleibt bestehen.
+
+2) AUF DEN SERVER LEGEN
+  Datei per FTP hochladen nach:  www.fehnverleih.de/karten/deutschland.pmtiles
+  (Die Adresse lässt sich in der App unter der Offline-Karte ändern.)
+  In die .htaccess im Ordner "karten" (damit die App die Datei in Teilen laden darf):
+
+    <IfModule mod_headers.c>
+      <FilesMatch "\.pmtiles$">
+        Header set Access-Control-Allow-Origin "*"
+      </FilesMatch>
+    </IfModule>
+
+  Der Server muss "Range"-Anfragen erlauben (Apache/nginx tun das normalerweise von selbst).
+
+3) APK INSTALLIEREN
+  Diese APK ist mit einem NEUEN Schlüssel signiert (das Original-Navi lässt sich ohne dessen Schlüssel
+  nicht neu signieren). Deshalb:
+    a) Die alte Navi-App einmal deinstallieren und danach diese APK installieren.
+    b) Neu anmelden. Noch nicht übertragene Fahrten/Tankbelege der alten App gehen dabei verloren –
+       vorher übertragen lassen.
+  Updates später nur mit demselben Schlüssel möglich: fv-navi-schluessel.p12 + Passwort GUT AUFHEBEN.
+
+4) KARTE LADEN (am Handy)
+  Navi → Einstellungen → Offline-Karte → "Karte laden". Am besten im WLAN, App offen lassen.
+  Wird unterbrochen, geht es mit "Weiterladen" dort weiter, wo es aufgehört hat.
+
+SCHLÜSSEL
+  Datei:     fv-navi-schluessel.p12   (Alias: fvnavi)
+  Passwort:  siehe passwort.txt
+  Gültig bis 2054.
+
+GETESTET / NICHT GETESTET
+  Geprüft: Kartenleser mit einer Testdatei (Kachel-IDs, Unterverzeichnisse, Wiederholungen),
+  Oberfläche (Einstellungen, Offline-Fahrt) mit Testattrappen, Verpacken, Ausrichtung, Signatur v1+v2.
+  NICHT geprüft: Installation und Ablauf auf einem echten Handy, Laden einer echten Deutschland-Datei,
+  Darstellung der Offline-Karte. Bitte zuerst auf einem Testhandy probieren.
